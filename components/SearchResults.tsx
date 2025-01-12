@@ -53,34 +53,65 @@ function filterAndSortVideos(videos: YouTubeVideo[], sort?: string, duration?: s
 }
 
 export default async function SearchResults({ query, sort, duration }: SearchResultsProps) {
-  const host = headers().get('host') || 'localhost:3000';
-  const protocol = process?.env?.NODE_ENV === 'development' ? 'http' : 'https';
-  
-  const res = await fetch(`${protocol}://${host}/api/search/youtube?q=${encodeURIComponent(query)}`, {
-    cache: 'no-store'
-  });
-  
-  if (!res.ok) {
-    throw new Error('Failed to fetch results');
-  }
-  
-  const { videos } = await res.json();
-  
-  if (!videos || videos.length === 0) {
-    return <div>No results found for "{query}"</div>;
-  }
+  try {
+    const host = headers().get('host') || 'localhost:3000';
+    const protocol = process?.env?.NODE_ENV === 'development' ? 'http' : 'https';
+    
+    const res = await fetch(`${protocol}://${host}/api/search/youtube?q=${encodeURIComponent(query)}`, {
+      cache: 'no-store',
+      next: { revalidate: 0 }
+    });
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      console.error('Search API error:', {
+        status: res.status,
+        statusText: res.statusText,
+        data: errorData
+      });
+      return (
+        <div className="text-center p-4 rounded-lg bg-red-50 text-red-600">
+          <p>Sorry, we couldn't fetch the search results at this time.</p>
+          <p className="text-sm mt-2">Please try again later or check your API configuration.</p>
+        </div>
+      );
+    }
+    
+    const data = await res.json();
+    const videos = data?.videos || [];
+    
+    if (!videos || videos.length === 0) {
+      return (
+        <div className="text-center p-4">
+          No results found for "{query}"
+        </div>
+      );
+    }
 
-  const filteredAndSortedVideos = filterAndSortVideos(videos, sort, duration);
+    const filteredAndSortedVideos = filterAndSortVideos(videos, sort, duration);
 
-  if (filteredAndSortedVideos.length === 0) {
-    return <div>No videos match the selected filters</div>;
+    if (filteredAndSortedVideos.length === 0) {
+      return (
+        <div className="text-center p-4">
+          No videos match the selected filters
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredAndSortedVideos.map((video: YouTubeVideo) => (
+          <VideoCard key={video.id} video={video} />
+        ))}
+      </div>
+    );
+  } catch (error) {
+    console.error('SearchResults error:', error);
+    return (
+      <div className="text-center p-4 rounded-lg bg-red-50 text-red-600">
+        <p>An unexpected error occurred while fetching search results.</p>
+        <p className="text-sm mt-2">Please try again later.</p>
+      </div>
+    );
   }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {filteredAndSortedVideos.map((video: YouTubeVideo) => (
-        <VideoCard key={video.id} video={video} />
-      ))}
-    </div>
-  );
 } 
