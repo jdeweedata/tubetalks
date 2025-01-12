@@ -1,6 +1,25 @@
 import { NextResponse } from 'next/server';
 import type { YouTubeVideo } from '@/types/youtube';
 
+// Function to extract video ID from various YouTube URL formats
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&]+)/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?]+)/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([^?]+)/,
+    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?]+)/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([^?]+)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -11,7 +30,18 @@ export async function GET(request: Request) {
 
   try {
     const apiKey = process.env.SERP_API_KEY;
-    const apiUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${apiKey}`;
+    
+    // Check if the query is a YouTube URL
+    const videoId = extractVideoId(query);
+    let apiUrl: string;
+    
+    if (videoId) {
+      // If it's a video URL, use the video ID for direct search
+      apiUrl = `https://serpapi.com/search.json?engine=youtube&search_query=https://youtube.com/watch?v=${videoId}&api_key=${apiKey}`;
+    } else {
+      // Regular search query
+      apiUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${apiKey}`;
+    }
 
     const response = await fetch(apiUrl);
     const data = await response.json();
